@@ -3,5 +3,6 @@
 /data/MCMC_param/*
 /data/MCMC_result/*
 /data/.Rhistory
+/.vscode
 
 
