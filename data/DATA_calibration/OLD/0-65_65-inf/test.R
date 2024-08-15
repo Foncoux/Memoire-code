@@ -1,0 +1,405 @@
+# poisson se fait sur données de comptage, pas un problème d'utiliser des données non entières ?
+# pour les ages, en population, on doit diviser chaque entrée de la Social contact matrix par la population dans cette classe, en proportion également (en proportion de pop du coup) ?
+rm(list = ls())
+
+library(jsonlite)
+library(ggplot2)
+NB_DAY = 350
+
+df_param1 <- data.frame(matrix(ncol = 12, nrow = 100))
+df_param2 <- data.frame(matrix(ncol = 12, nrow = 100))
+#colnames(df_param1) <- c("Delta", "Gamma", "Epsilon", "r", "X0", "beta0", "beta1", "beta2", "beta3", "beta4", "beta5", "beta6")
+#colnames(df_param2) <- c("Delta", "Gamma", "Epsilon", "r", "X0", "beta0", "beta1", "beta2", "beta3", "beta4", "beta5", "beta6")
+
+
+for (i in 1:100) {
+  
+  filename <- paste0("../../MCMC_param/save_MCMC", i-1, ".csv")
+  data <- read.table(filename,header = TRUE,sep = ',')
+  for (j in 1:12) {
+    df_param1[i,j] = data[1,j]
+    df_param2[i,j] = data[2,j]
+  }
+
+}
+df_param1$X0 = df_param1$X0*17282163.0
+df_param2$X0 = df_param2$X0*17282163.0
+
+intervals0 <- apply(df_param1, 2, function(column) quantile(column, c(0.025, 0.975)))
+intervals0
+
+intervals1 <- apply(df_param2, 2, function(column) quantile(column, c(0.025, 0.975)))
+intervals1
+
+
+
+
+MCMC_data <- fromJSON("../../MCMC_result/data_MCMC0.json")
+MCMC_data1 = MCMC_data$Classe1
+MCMC_data2 = MCMC_data$Classe2
+num_MCMC_data1 <- lapply(MCMC_data1, as.numeric)
+num_MCMC_data2 <- lapply(MCMC_data2, as.numeric)
+df_temp1 <- as.data.frame(num_MCMC_data1)
+df_temp2 <- as.data.frame(num_MCMC_data2)
+dfMCMC1 = df_temp1
+dfMCMC2 = df_temp2
+
+Classe1_list = list()
+Classe1_list[[length(Classe1_list) + 1]] <- dfMCMC1
+Classe2_list = list()
+Classe2_list[[length(Classe2_list) + 1]] <- dfMCMC2
+
+for (i in 1:99) {
+  filename <- paste0("../../MCMC_result/data_MCMC", i, ".json")
+  MCMC_data <- fromJSON(filename)
+  MCMC_data1 = MCMC_data$Classe1
+  MCMC_data2 = MCMC_data$Classe2
+  num_MCMC_data1 <- lapply(MCMC_data1, as.numeric)
+  num_MCMC_data2 <- lapply(MCMC_data2, as.numeric)
+  df_temp1 <- as.data.frame(num_MCMC_data1)
+  df_temp2 <- as.data.frame(num_MCMC_data2)
+  dfMCMC1 =df_temp1
+  dfMCMC2 =df_temp2
+  Classe1_list[[length(Classe1_list) + 1]] <- dfMCMC1
+  Classe2_list[[length(Classe2_list) + 1]] <- dfMCMC2
+}
+
+### compartiement D ###
+Compartiment = 5
+df1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df1) <- paste0("Jour_", 1:NB_DAY)
+df2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df2) <- paste0("Jour_", 1:NB_DAY)
+
+for (j in 1:NB_DAY) {
+  COMP1 = c()
+  COMP2 = c()
+  for (i in 1:100) {
+    COMP1 = c(COMP1,Classe1_list[[i]][j,Compartiment])
+    COMP2 = c(COMP2,Classe2_list[[i]][j,Compartiment])
+  }
+  df1[,j] = COMP1
+  df2[,j] = COMP2
+}
+
+df_result1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df_result1) <- paste0("Jour_", 1:NB_DAY)
+df_result2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df_result2) <- paste0("Jour_", 1:NB_DAY)
+
+df_result1[,1] = df1[,1]
+df_result2[,1] = df2[,1]
+for(i in 2:NB_DAY){
+  df_result1[,i] = df1[,i] - df1[,i-1]
+  df_result2[,i] = df2[,i] - df2[,i-1]
+}
+
+
+df_stat1_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat1_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat1_classe1$median[j] = median(df1[,j])
+  df_stat1_classe1$lower[j] = quantile(df1[,j], c(0.025, 0.975))[1]
+  df_stat1_classe1$upper[j] = quantile(df1[,j], c(0.025, 0.975))[2]
+  
+  df_stat1_classe2$median[j] = median(df2[,j])
+  df_stat1_classe2$lower[j] = quantile(df2[,j], c(0.025, 0.975))[1]
+  df_stat1_classe2$upper[j] = quantile(df2[,j], c(0.025, 0.975))[2]
+}
+
+df_stat2_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat2_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat2_classe2$median[j] = median(df_result2[,j])
+  df_stat2_classe2$lower[j] = quantile(df_result2[,j], c(0.025, 0.975))[1]
+  df_stat2_classe2$upper[j] = quantile(df_result2[,j], c(0.025, 0.975))[2]
+  
+  df_stat2_classe1$median[j] = median(df_result1[,j])
+  df_stat2_classe1$lower[j] = quantile(df_result1[,j], c(0.025, 0.975))[1]
+  df_stat2_classe1$upper[j] = quantile(df_result1[,j], c(0.025, 0.975))[2]
+  
+  }
+
+df_stat1_all = df_stat1_classe1+df_stat1_classe2
+df_stat2_all = df_stat2_classe1+df_stat2_classe2
+
+days = 1:NB_DAY
+ggplot(df_stat1_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+
+death1 = read.table('day_death_csv_0-65_65-inf.csv',header = TRUE, sep = ",")
+death = death1[1:281,]
+# La nouvelle longueur souhaitée
+nouvelle_longueur <- NB_DAY
+
+# Ajouter des valeurs manquantes à toutes les colonnes si la longueur actuelle est inférieure à la nouvelle longueur
+if (nrow(death) < nouvelle_longueur) {
+  nombre_de_valeurs_manquantes <- nouvelle_longueur - nrow(death)
+  new_data=data.frame(matrix(NA, nrow = nombre_de_valeurs_manquantes, ncol = ncol(death)))
+  colnames(new_data) <- colnames(death)
+  death <- rbind(death, new_data)
+}
+
+ggplot(df_stat2_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=X0.65), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat2_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=X65.inf), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat2_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=all), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+
+
+### COMPARTIMENT Q ###
+Compartiment = 6
+df1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df1) <- paste0("Jour_", 1:NB_DAY)
+df2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df2) <- paste0("Jour_", 1:NB_DAY)
+
+for (j in 1:NB_DAY) {
+  COMP1 = c()
+  COMP2 = c()
+  for (i in 1:100) {
+    COMP1 = c(COMP1,Classe1_list[[i]][j,Compartiment])
+    COMP2 = c(COMP2,Classe2_list[[i]][j,Compartiment])
+  }
+  df1[,j] = COMP1
+  df2[,j] = COMP2
+}
+
+df_stat1_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat1_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat1_classe1$median[j] = median(df1[,j])
+  df_stat1_classe1$lower[j] = quantile(df1[,j], c(0.025, 0.975))[1]
+  df_stat1_classe1$upper[j] = quantile(df1[,j], c(0.025, 0.975))[2]
+  
+  df_stat1_classe2$median[j] = median(df2[,j])
+  df_stat1_classe2$lower[j] = quantile(df2[,j], c(0.025, 0.975))[1]
+  df_stat1_classe2$upper[j] = quantile(df2[,j], c(0.025, 0.975))[2]
+}
+
+df_stat1_all = df_stat1_classe1+df_stat1_classe2
+
+
+death1 = read.table('day_hosp_csv_0-65_65-inf.csv',header = TRUE, sep = ",")
+death = death1[1:281,]
+# La nouvelle longueur souhaitée
+nouvelle_longueur <- NB_DAY
+
+# Ajouter des valeurs manquantes à toutes les colonnes si la longueur actuelle est inférieure à la nouvelle longueur
+if (nrow(death) < nouvelle_longueur) {
+  nombre_de_valeurs_manquantes <- nouvelle_longueur - nrow(death)
+  new_data=data.frame(matrix(NA, nrow = nombre_de_valeurs_manquantes, ncol = ncol(death)))
+  colnames(new_data) <- colnames(death)
+  death <- rbind(death, new_data)
+}
+
+ggplot(df_stat1_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=X0.65), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=X65.inf), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  geom_point(data=death, aes(y=all), color="black",shape=8) + 
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+
+
+### COMPARTIMENT R ###
+Compartiment = 3
+df1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df1) <- paste0("Jour_", 1:NB_DAY)
+df2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df2) <- paste0("Jour_", 1:NB_DAY)
+
+for (j in 1:NB_DAY) {
+  COMP1 = c()
+  COMP2 = c()
+  for (i in 1:100) {
+    COMP1 = c(COMP1,Classe1_list[[i]][j,Compartiment])
+    COMP2 = c(COMP2,Classe2_list[[i]][j,Compartiment])
+  }
+  df1[,j] = COMP1
+  df2[,j] = COMP2
+}
+
+df_stat1_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat1_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat1_classe1$median[j] = median(df1[,j])
+  df_stat1_classe1$lower[j] = quantile(df1[,j], c(0.025, 0.975))[1]
+  df_stat1_classe1$upper[j] = quantile(df1[,j], c(0.025, 0.975))[2]
+  
+  df_stat1_classe2$median[j] = median(df2[,j])
+  df_stat1_classe2$lower[j] = quantile(df2[,j], c(0.025, 0.975))[1]
+  df_stat1_classe2$upper[j] = quantile(df2[,j], c(0.025, 0.975))[2]
+}
+
+df_stat1_all = df_stat1_classe1+df_stat1_classe2
+
+
+ggplot(df_stat1_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+
+### COMPARTIMENT I ###
+Compartiment = 2
+df1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df1) <- paste0("Jour_", 1:NB_DAY)
+df2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df2) <- paste0("Jour_", 1:NB_DAY)
+
+for (j in 1:NB_DAY) {
+  COMP1 = c()
+  COMP2 = c()
+  for (i in 1:100) {
+    COMP1 = c(COMP1,Classe1_list[[i]][j,Compartiment])
+    COMP2 = c(COMP2,Classe2_list[[i]][j,Compartiment])
+  }
+  df1[,j] = COMP1
+  df2[,j] = COMP2
+}
+
+df_stat1_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat1_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat1_classe1$median[j] = median(df1[,j])
+  df_stat1_classe1$lower[j] = quantile(df1[,j], c(0.025, 0.975))[1]
+  df_stat1_classe1$upper[j] = quantile(df1[,j], c(0.025, 0.975))[2]
+  
+  df_stat1_classe2$median[j] = median(df2[,j])
+  df_stat1_classe2$lower[j] = quantile(df2[,j], c(0.025, 0.975))[1]
+  df_stat1_classe2$upper[j] = quantile(df2[,j], c(0.025, 0.975))[2]
+}
+
+df_stat1_all = df_stat1_classe1+df_stat1_classe2
+
+
+ggplot(df_stat1_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+
+### COMPARTIMENT S ###
+Compartiment = 1
+df1 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df1) <- paste0("Jour_", 1:NB_DAY)
+df2 <- data.frame(matrix(ncol = NB_DAY, nrow = 100))
+colnames(df2) <- paste0("Jour_", 1:NB_DAY)
+
+for (j in 1:NB_DAY) {
+  COMP1 = c()
+  COMP2 = c()
+  for (i in 1:100) {
+    COMP1 = c(COMP1,Classe1_list[[i]][j,Compartiment])
+    COMP2 = c(COMP2,Classe2_list[[i]][j,Compartiment])
+  }
+  df1[,j] = COMP1
+  df2[,j] = COMP2
+}
+
+df_stat1_classe1 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+df_stat1_classe2 <- data.frame(median = numeric(NB_DAY), lower = numeric(NB_DAY), upper = numeric(NB_DAY))
+for (j in 1:NB_DAY) {
+  df_stat1_classe1$median[j] = median(df1[,j])
+  df_stat1_classe1$lower[j] = quantile(df1[,j], c(0.025, 0.975))[1]
+  df_stat1_classe1$upper[j] = quantile(df1[,j], c(0.025, 0.975))[2]
+  
+  df_stat1_classe2$median[j] = median(df2[,j])
+  df_stat1_classe2$lower[j] = quantile(df2[,j], c(0.025, 0.975))[1]
+  df_stat1_classe2$upper[j] = quantile(df2[,j], c(0.025, 0.975))[2]
+}
+
+df_stat1_all = df_stat1_classe1+df_stat1_classe2
+
+
+ggplot(df_stat1_classe1, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_classe2, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
+ggplot(df_stat1_all, aes(x=days)) +
+  geom_line(aes(y=median), color="blue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), fill="skyblue", alpha=0.4) +
+  labs(title="Daily Simulations with 95% Credible Interval", y="Value") +
+  theme_minimal()
+
